@@ -80,7 +80,9 @@ Windows не предоставляет атомарную замену неск
 
 После push тега `v<Version>` и успешного завершения всех проверок кандидата
 CI создаёт draft в [GitHub Releases](https://github.com/prisioner/rutony-credits/releases)
-с ZIP, `release-manifest.json` и `SHA256SUMS`. `Version` должна точно
+с `RutonyCredits-<Version>.zip`, `release-manifest.json` и `SHA256SUMS`. Полный SHA
+исходного commit сохраняется в манифестах; ZIP bytes при переименовании
+сохраняются. `Version` должна точно
 совпадать с `Version` из `Directory.Build.props`; неверный тег отклоняется.
 Владелец проверяет draft и публикует его вручную кнопкой **Publish**.
 

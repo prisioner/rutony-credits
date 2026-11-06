@@ -57,22 +57,38 @@ function Reject([scriptblock]$Action,[string]$Pattern) {
     try { & $Action | Out-Null } catch { $caught=$true; Assert ($_.ToString() -match $Pattern) "Unexpected rejection: $_" }
     Assert $caught 'Invalid release was accepted'
 }
-Case 'stage exactly three assets and notes, preserving verified bytes' {
+Case 'stage friendly ZIP name, unchanged package bytes and consistent metadata' {
     $f=New-Fixture
+    $publicName="$DeliveryModule-$version.zip"
+    $originalManifestHash=(Get-FileHash -LiteralPath (Join-Path $f.Input 'release-manifest.json')).Hash
+    $original=Read-Meta $f
     # Additional Workshop material is retained by CI but must not become release assets.
     [IO.File]::WriteAllText((Join-Path $f.Input 'not-an-asset.txt'),'synthetic')
     Prepare $f
     $actual=@(Get-ChildItem -LiteralPath $f.Output -File | ForEach-Object Name | Sort-Object)
-    $expected=@($f.Archive,'release-manifest.json','SHA256SUMS','release-notes.md') | Sort-Object
-    Assert (($actual -join '|') -ceq ($expected -join '|')) 'Unexpected release file set'
-    foreach($name in @($f.Archive,'release-manifest.json')) {
-        Assert ((Get-FileHash -LiteralPath (Join-Path $f.Output $name)).Hash -ceq (Get-FileHash -LiteralPath (Join-Path $f.Input $name)).Hash) 'Producer bytes changed'
+    $expected=@($publicName,'release-manifest.json','SHA256SUMS','release-notes.md') | Sort-Object
+    Assert (($actual -join '|') -ceq ($expected -join '|')) 'Unexpected release file set or unfriendly ZIP name'
+    Assert ((Get-FileHash -LiteralPath (Join-Path $f.Output $publicName)).Hash -ceq (Get-FileHash -LiteralPath (Join-Path $f.Input $f.Archive)).Hash) 'ZIP bytes changed during rename'
+    $published=Get-Content -Raw -LiteralPath (Join-Path $f.Output 'release-manifest.json')|ConvertFrom-Json
+    Assert ($published.archive.path -ceq $publicName) 'Published archive path was not updated'
+    Assert ($published.archive.sha256 -ceq $original.archive.sha256 -and $published.archive.length -eq $original.archive.length) 'Published archive identity changed'
+    Assert ($published.revision -ceq $original.revision -and $published.version -ceq $original.version -and $published.packageManifest.sha256 -ceq $original.packageManifest.sha256) 'Source/package binding changed'
+    Assert ((Get-FileHash -LiteralPath (Join-Path $f.Input 'release-manifest.json')).Hash -ceq $originalManifestHash) 'Producer manifest was modified'
+    foreach($name in @($publicName,'release-manifest.json')) {
         $sum=(Get-FileHash -LiteralPath (Join-Path $f.Output $name)).Hash.ToLowerInvariant()
-        Assert ((Get-Content -Raw -LiteralPath (Join-Path $f.Output 'SHA256SUMS')).Contains("$sum  $name")) 'Missing checksum'
+        Assert ((Get-Content -Raw -LiteralPath (Join-Path $f.Output 'SHA256SUMS')).Contains("$sum  $name")) 'Missing updated checksum'
     }
     $notes=Get-Content -Raw -LiteralPath (Join-Path $f.Output 'release-notes.md')
     Assert ($notes.Contains("https://github.com/sample-owner/sample-repo/blob/$revision/README.md")) 'Installation link is not revision-pinned and absolute'
     Assert ($notes -notmatch '\]\((?:\.\.?/|docs/)') 'Relative release link'
+}
+Case 'already friendly assets can be validated and staged again' {
+    $f=New-Fixture
+    $publicName="$DeliveryModule-$version.zip"
+    Move-Item -LiteralPath (Join-Path $f.Input $f.Archive) -Destination (Join-Path $f.Input $publicName)
+    $m=Read-Meta $f;$m.archive.path=$publicName;Save-Meta $f $m
+    Prepare $f
+    Assert ((Get-FileHash -LiteralPath (Join-Path $f.Output $publicName)).Hash -ceq (Get-FileHash -LiteralPath (Join-Path $f.Input $publicName)).Hash) 'Published ZIP bytes changed'
 }
 Case 'wrong tag is rejected' { $f=New-Fixture; Reject { Prepare $f -Tag 'v9.9.9' } 'tag' }
 Case 'another built revision is rejected' { $f=New-Fixture; Reject { Prepare $f -Revision ('2'*40) } 'identity' }

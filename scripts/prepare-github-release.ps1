@@ -21,9 +21,10 @@ $metadataPath = Join-DeliveryPath $inputRoot 'release-manifest.json'
 if (-not (Test-Path -LiteralPath $metadataPath -PathType Leaf) -or (Get-Item -LiteralPath $metadataPath).Length -gt 1048576) { throw 'Bounded release manifest required.' }
 $metadata = Get-Content -Raw -Encoding UTF8 -LiteralPath $metadataPath | ConvertFrom-Json
 if ($metadata.schema -ne 1 -or $metadata.module -cne $DeliveryModule -or $metadata.version -cne $version -or $metadata.revision -cne $SourceRevision) { throw 'Release identity does not match the checked source.' }
-$archiveName = "$DeliveryModule-$version-$SourceRevision.zip"
-if ($metadata.archive.path -cne $archiveName -or $metadata.archive.sha256 -cnotmatch '^[0-9a-f]{64}$') { throw 'Release archive name/hash contract mismatch.' }
-$archivePath = Join-DeliveryPath $inputRoot $archiveName
+$candidateName = "$DeliveryModule-$version-$SourceRevision.zip"
+$archiveName = "$DeliveryModule-$version.zip"
+if ($metadata.archive.path -cnotin @($candidateName,$archiveName) -or $metadata.archive.sha256 -cnotmatch '^[0-9a-f]{64}$') { throw 'Release archive name/hash contract mismatch.' }
+$archivePath = Join-DeliveryPath $inputRoot $metadata.archive.path
 if (-not (Test-Path -LiteralPath $archivePath -PathType Leaf)) { throw 'Release archive is missing.' }
 if ((Get-Item -LiteralPath $archivePath).Length -ne $metadata.archive.length -or (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $metadata.archive.sha256) { throw 'Release archive hash/length mismatch.' }
 if ($metadata.packageManifest.path -cne 'package-manifest.json' -or $metadata.packageManifest.sha256 -cnotmatch '^[0-9a-f]{64}$') { throw 'Package manifest binding is invalid.' }
@@ -52,9 +53,10 @@ $package = Read-DeliveryManifest $stage
 if ($package.version -cne $version -or $package.revision -cne $SourceRevision) { throw 'Package manifest identity mismatch.' }
 if ((Get-FileHash -LiteralPath (Join-Path $stage 'package-manifest.json') -Algorithm SHA256).Hash.ToLowerInvariant() -cne $metadata.packageManifest.sha256) { throw 'Package manifest hash mismatch.' }
 New-Item -ItemType Directory -Path $outputRoot | Out-Null
-foreach ($name in @($archiveName,'release-manifest.json')) {
-    Copy-Item -LiteralPath (Join-DeliveryPath $inputRoot $name) -Destination (Join-DeliveryPath $outputRoot $name)
-}
+Copy-Item -LiteralPath $archivePath -Destination (Join-DeliveryPath $outputRoot $archiveName)
+# Public names stay readable; full source identity remains inside both manifests.
+$metadata.archive.path = $archiveName
+Write-DeliveryJson (Join-DeliveryPath $outputRoot 'release-manifest.json') $metadata
 $encoding = [Text.UTF8Encoding]::new($false)
 $sums = foreach ($name in @($archiveName,'release-manifest.json')) {
     (Get-FileHash -LiteralPath (Join-DeliveryPath $outputRoot $name) -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $name
