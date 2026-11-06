@@ -1,0 +1,10 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rutony Credits — открыть управление</title>
+<style>:root{font:17px/1.5 system-ui,sans-serif;color:#e4edf7;background:#101923;color-scheme:dark}main{max-width:640px;margin:70px auto;padding:24px}h1{font-size:32px}section{background:#192634;border:1px solid #334659;border-radius:12px;padding:24px;margin:20px 0}label{display:block;color:#b9c8d8;margin-bottom:18px}input{font:inherit;background:#101923;color:inherit;border:1px solid #53708b;border-radius:6px;padding:7px;width:100px;margin-left:10px}a{display:inline-block;background:#73d8bb;color:#10271f;text-decoration:none;padding:10px 18px;border-radius:7px}p{color:#b9c8d8}a:focus-visible,input:focus-visible{outline:3px solid #b6f3e1;outline-offset:3px}</style></head><body><main><h1>Rutony Credits</h1>
+<section><h2>Титры</h2><label>Порт<input id="credits-port" type="number" min="1024" max="65535" value="18765" required></label><a id="credits-link" href="http://127.0.0.1:18765/control" target="_blank" rel="noopener">Открыть титры ↗</a></section>
+<p>Панель доступна, пока скрипт титров включён в RutonyChat. Если вы меняли порт в параметрах скрипта, укажите его здесь.</p></main>
+<script>
+const input=document.getElementById('credits-port'),link=document.getElementById('credits-link');
+try {const saved=localStorage.getItem('rutony-credits-port');if(saved && /^\d+$/.test(saved) && Number(saved)>=1024 && Number(saved)<=65535) input.value=saved;}catch {}
+function update(){const port=input.valueAsNumber;if(input.validity.valid && Number.isInteger(port)){link.href='http://127.0.0.1:'+port+'/control';link.removeAttribute('aria-disabled');try {localStorage.setItem('rutony-credits-port',String(port));}catch {}}else {link.removeAttribute('href');link.setAttribute('aria-disabled','true');}}
+input.addEventListener('input',update);link.addEventListener('click',event=>{if(!input.reportValidity()) event.preventDefault();});update();
+</script></body></html>

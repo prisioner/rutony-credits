@@ -1,0 +1,2 @@
+# Deterministic compiler inputs, independent of core.autocrlf.
+*.cs text eol=lf

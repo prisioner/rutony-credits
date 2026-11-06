@@ -1,0 +1,7 @@
+{
+  "params": [
+    { "name": "PackageDirectory", "type": "string", "default": "", "desc": { "russian": "Папка пакета", "english": "Package folder" } },
+    { "name": "DataDirectory", "type": "string", "default": "", "desc": { "russian": "Папка журналов", "english": "Data folder" } },
+    { "name": "Port", "type": "integer", "default": 18765, "min": 1024, "max": 65535, "desc": { "russian": "Порт", "english": "Port" } }
+  ]
+}

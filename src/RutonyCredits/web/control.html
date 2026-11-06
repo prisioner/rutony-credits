@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="credits-token" content="__TOKEN__">
+  <title>Rutony Credits — управление</title><link rel="stylesheet" href="/control.css">
+  <script type="module" src="/control.js"></script>
+</head>
+<body>
+<main>
+  <header><div><div class="eyebrow">RUTONY CREDITS</div><h1>Спасибо, что были рядом.</h1><p>Финальные титры вашего стрима</p></div><span id="connection" class="badge">Соединяемся…</span></header>
+  <div id="notice" role="status" hidden></div>
+  <section class="panel playback">
+    <div class="section-top"><div><h2>Показ титров</h2><p id="playback">Ожидание состояния</p></div><span id="playback-mode" class="single">Следующий: один проход</span></div>
+    <div class="actions"><button id="run" class="primary" disabled>Запустить титры</button><button id="preview" disabled>Тестовый показ</button><button id="stop" class="quiet" disabled>Остановить</button></div>
+    <p class="hint">Тестовый показ использует вымышленные имена и будет виден в OBS. Журнал настоящих событий не меняется.</p>
+    <div class="screen"><div id="preview-frame"><iframe src="/overlay?preview=1" title="Предпросмотр экрана титров" tabindex="-1"></iframe></div><div class="screen-label">ПРЕДПРОСМОТР · 1920 × 1080 · В OBS ФОН ПРОЗРАЧНЫЙ</div></div>
+    <div class="source"><div><label for="obs-url">Адрес для OBS Browser Source</label><input id="obs-url" readonly></div><button id="copy" class="quiet">Копировать</button></div>
+    <p class="hint">Размер источника: 1920 × 1080. Оставьте источник загруженным, даже когда он скрыт. После одного прохода титры исчезнут; повтор по кругу продолжается до кнопки «Остановить».</p>
+  </section>
+  <div class="columns">
+    <section class="panel"><h2>Текущий стрим</h2><p class="hint">Считаем события с момента включения скрипта или последнего сброса. Во время показа сбор продолжается.</p><div id="counts" class="counts"></div><p id="period" class="period"></p><p id="twitch-raids-status" class="hint" role="status" hidden></p><div class="reset"><button id="reset" class="danger" disabled>Сбросить счётчики</button><p class="hint">Текущий список очистится.<br>Прежние журналы сохранятся на диске.</p></div></section>
+    <section class="panel"><h2>Оформление</h2><p class="hint">Сохранённые настройки применятся при следующем запуске.</p>
+      <form id="settings">
+        <div class="font-picker"><label for="font-family">Шрифт</label><input id="font-family" name="fontFamily" value="Arial" maxlength="100" required autocomplete="off" spellcheck="false" aria-describedby="font-hint"><div id="fonts" class="font-options" aria-label="Установленные шрифты" hidden></div></div>
+        <p id="font-hint" class="hint">Загружаем список установленных шрифтов…</p>
+        <div class="fields"><label>Размер, px<input name="fontSize" type="number" min="16" max="160" value="48" required></label><label>Скорость, px/с<input name="speed" type="number" min="10" max="400" value="80" required></label><label>Цвет<input name="textColor" type="color" value="#ffffff"></label></div>
+        <div class="checks"><label class="check-label"><input name="loop" type="checkbox"><span>Повторять титры по кругу до остановки</span></label><label class="check-label"><input name="aggregateDonations" type="checkbox"><span>Суммировать донаты</span></label></div>
+        <h3>Разделы и заголовки</h3><p class="hint">Отметьте разделы для показа. Сбор всех событий продолжается независимо от галочек.</p><div id="headings"></div>
+        <label class="moderator-exclusions" for="moderator-exclusions">Исключения модераторов<textarea id="moderator-exclusions" name="moderatorExclusions" rows="4" spellcheck="false" autocomplete="off" aria-describedby="moderator-exclusions-hint"></textarea></label>
+        <p id="moderator-exclusions-hint" class="hint">По одному нику на строку. Регистр и @ в начале не важны. Применяется только к модераторам. Не более 50 ников, до 200 знаков каждый.</p>
+        <button type="submit" id="save" disabled>Сохранить оформление</button><span id="saved" class="save-status" role="status"></span>
+      </form>
+    </section>
+  </div>
+  <section id="obs-panel" class="panel" hidden>
+    <div class="section-top"><h2>Автоматизация OBS</h2><span id="obs-connection" class="badge">Проверяем подключение…</span></div>
+    <p class="hint">Адрес сервера фиксирован: 127.0.0.1 (этот компьютер). Включите сервер WebSocket в OBS и укажите его порт и пароль.</p>
+    <p id="obs-error" class="form-error" role="status" hidden></p>
+    <form id="obs-settings" hidden>
+      <label class="check-label"><input name="enabled" type="checkbox"><span>Подключаться к OBS</span></label>
+      <div class="obs-fields">
+        <label>Порт<input name="port" type="number" min="1" max="65535" value="4455" required></label>
+        <div><label id="obs-scene-label" for="obs-scene">Program-сцена с титрами</label><select id="obs-scene-select" aria-labelledby="obs-scene-label" hidden></select><input id="obs-scene" name="sceneName" autocomplete="off"><p class="hint">После подключения выберите сцену из списка. Пока связи нет, можно ввести её точное имя.</p></div>
+      </div>
+      <p id="obs-phase" class="hint" role="status"></p>
+      <div class="obs-password"><label>Пароль WebSocket<input name="password" type="password" autocomplete="new-password" aria-describedby="obs-password-hint"></label><p id="obs-password-hint" class="hint"></p></div>
+      <div class="checks">
+        <label class="check-label"><input name="clearPassword" type="checkbox"><span>Удалить сохранённый пароль</span></label>
+        <label class="check-label"><input name="autoStart" type="checkbox" checked><span>Запускать титры при переходе на эту Program-сцену</span></label>
+        <label class="check-label"><input name="resetOnStop" type="checkbox" checked><span>Сбрасывать счётчики после остановки трансляции</span></label>
+      </div>
+      <label>Задержка сброса, минут<input name="resetDelayMinutes" type="number" min="1" max="120" step="1" value="5" required></label>
+      <p class="hint">После подтверждённой остановки ждём указанное время. Возобновление эфира отменяет сброс. При разрыве связи статистика сохраняется. Закрытие Rutony или отключение скрипта во время ожидания сразу сбрасывает счётчики.</p>
+      <p id="obs-pending-reset" class="hint" role="status" hidden></p>
+      <p class="hint">При выходе с выбранной Program-сцены титры останавливаются. Предпросмотр сцены не запускает показ.</p>
+      <button type="submit" id="obs-save" disabled>Сохранить настройки OBS</button><span id="obs-saved" class="save-status" role="status"></span>
+    </form>
+  </section>
+</main>
+</body></html>

@@ -1,0 +1,90 @@
+name: Candidate checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  candidate:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      DOTNET_MULTILEVEL_LOOKUP: '0'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+      DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false'
+    steps:
+      - name: Checkout complete history without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Read exact SDK version
+        id: sdk
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sdk = (Get-Content -Raw -LiteralPath global.json | ConvertFrom-Json).sdk.version
+          if ($sdk -isnot [string] -or $sdk -cnotmatch '\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.[1-9][0-9]{2,}\z') { throw 'global.json must specify a literal stable SDK version.' }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "version=$sdk" -Encoding utf8
+      - name: Select exact SDK from global.json
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.temp }}/candidate-dotnet
+        with:
+          dotnet-version: ${{ steps.sdk.outputs.version }}
+          skip-lts-prepass: true
+          cache: false
+      - name: Select exact Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.16.0'
+          package-manager-cache: false
+      - name: Verify selected tools
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expected = (Get-Content -Raw global.json | ConvertFrom-Json).sdk.version
+          $actual = (& dotnet --version).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -cne $expected) { throw "SDK mismatch: expected $expected; selected $actual" }
+          $node = (& node --version).Trim()
+          if ($LASTEXITCODE -ne 0 -or $node -cne 'v24.16.0') { throw 'Node.js version mismatch' }
+      - name: Check tracked content and history for publication
+        run: ./scripts/check-publication.ps1
+      - name: Check publication scanner regression fixtures
+        run: pwsh -NoProfile -File tests/publication.tests.ps1
+      - name: Build and run complete offline checks
+        run: ./scripts/build.ps1 -Check
+      - name: Compare canonical artifacts with two clean checkout builds
+        run: ./scripts/check-reproducibility.ps1
+      - name: Check reproducibility rejection paths
+        run: pwsh -NoProfile -File tests/reproducibility.tests.ps1
+      - name: Prepare versioned candidate
+        run: ./scripts/package-release.ps1
+      - name: Verify versioned candidate
+        run: ./scripts/package-release.ps1 -Verify
+      - name: Prepare offline Workshop payload and materials
+        run: ./scripts/prepare-workshop.ps1
+      - name: Check Workshop staging regression fixtures
+        run: pwsh -NoProfile -File tests/workshop.tests.ps1
+      - name: Retain only user packages and Workshop materials
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: candidate-${{ github.sha }}
+          path: |
+            dist/*.zip
+            dist/release-manifest.json
+            dist/Workshop/**
+            dist/WorkshopMaterials/**
+          if-no-files-found: error
+          retention-days: 14
+          include-hidden-files: false

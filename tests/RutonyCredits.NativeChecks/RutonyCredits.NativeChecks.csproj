@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup><OutputType>Exe</OutputType><Nullable>disable</Nullable></PropertyGroup>
+<ItemGroup><ProjectReference Include="../../src/RutonyCredits/RutonyCredits.csproj" />
+<Compile Include="../../integration/rutony_credits.cs" Link="RutonyScript.cs" />
+<Compile Include="../RutonyCredits.Checks/FakeRutonyAlerts.cs" Link="FakeRutonyAlerts.cs" /></ItemGroup>
+</Project>

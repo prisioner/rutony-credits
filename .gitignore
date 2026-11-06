@@ -1,0 +1,41 @@
+# Необязательная личная справка; обязательные знания остаются в документации.
+/.local/
+
+# Локальные секреты. Эти правила не удаляют уже отслеживаемые файлы.
+.env
+.env.*
+!.env.example
+
+# Локальные файлы редакторов и ОС.
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Сборка и локальные данные расширения.
+**/bin/
+**/obj/
+/dist/
+/.runtime/
+
+# Exact runtime names owned by this module; no broad JSON/log exclusion.
+settings.json
+current.json
+obs.json
+obs-secret.bin
+writer.lock
+sessions/
+
+# Private uploader working metadata, not the sanitized public draft.
+workshopitem.meta
+
+# Interrupted writes and preserved copies of owned runtime files.
+settings.json.tmp
+current.json.tmp
+settings.json.recovery-*
+current.json.recovery-*
+obs.json.tmp-*
+obs.json.recovery-*
+obs-secret.bin.tmp-*
+obs-secret.bin.recovery-*
+obs-secret.bin.rollback-*
