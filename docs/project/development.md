@@ -159,9 +159,11 @@ preinstalled SDK с более высокой feature band не должен н�
 Локально сохраняется существующий `latestFeature` из global.json.
 
 Официальные actions закреплены полным commit SHA; обновляя pin, сверьте его
-с официальным release и пересмотрите изменения. Token имеет только
+с официальным release и пересмотрите изменения. В candidate job token имеет только
 `contents: read`, checkout не сохраняет credentials и получает всю историю.
-Нет secrets, deploy/release permissions или установки в настоящее приложение.
+Отдельный job после успешных проверок push-тега версии получает `contents: write`
+и `actions: read` для скачивания artifacts того же run и создания draft Release
+через `GITHUB_TOKEN`. Публикация вручную; установки в настоящее приложение нет.
 Новые запуски той же ветки/PR отменяют прежние; timeout job — 30 минут.
 Workflow выполняет publication scanner и его fixtures, полный build-Check,
 реальную reproducibility gate с двумя checkout, её негативные fixtures,
@@ -172,3 +174,6 @@ Workflow выполняет publication scanner и его fixtures, полный
 Конфигурация workflow описывает состав проверок; результат конкретного запуска
 смотрите в GitHub Actions для соответствующего commit. SHA в пакете при
 изменённом рабочем дереве описывает только базовый commit.
+
+Офлайн-проверки подготовки GitHub Release: `pwsh -NoProfile -File tests/github-release.tests.ps1`.
+Они проверяют идентичность пакета, вложенные хеши, состав ZIP и сохранность существующего output.

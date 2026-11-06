@@ -14,6 +14,8 @@ concurrency:
 
 jobs:
   candidate:
+    outputs:
+      revision: ${{ steps.source.outputs.revision }}
     runs-on: windows-2025
     timeout-minutes: 30
     defaults:
@@ -30,6 +32,21 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: Identify built commit and validate release tag
+        id: source
+        env:
+          IS_RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v') }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $revision = (& git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $revision -cnotmatch '^[0-9a-f]{40}$') { throw 'Full source commit required.' }
+          if ($env:IS_RELEASE_TAG -eq 'true') {
+            . ./scripts/package-contract.ps1
+            $version = Get-DeliveryVersion $PWD.Path
+            if ($env:RELEASE_TAG -cne "v$version") { throw 'Release tag must match Version in Directory.Build.props.' }
+          }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "revision=$revision" -Encoding utf8
       - name: Read exact SDK version
         id: sdk
         run: |
@@ -62,6 +79,8 @@ jobs:
         run: ./scripts/check-publication.ps1
       - name: Check publication scanner regression fixtures
         run: pwsh -NoProfile -File tests/publication.tests.ps1
+      - name: Check GitHub release asset regression fixtures
+        run: pwsh -NoProfile -File tests/github-release.tests.ps1
       - name: Build and run complete offline checks
         run: ./scripts/build.ps1 -Check
       - name: Compare canonical artifacts with two clean checkout builds
@@ -88,3 +107,55 @@ jobs:
           if-no-files-found: error
           retention-days: 14
           include-hidden-files: false
+
+  draft-release:
+    needs: candidate
+    if: github.event_name == 'push' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-2025
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      SOURCE_REVISION: ${{ needs.candidate.outputs.revision }}
+      CANDIDATE_ARTIFACT: candidate-${{ github.sha }}
+    steps:
+      - name: Checkout the commit built by candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.candidate.outputs.revision }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate tag binding and refuse existing releases
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tagRevision = (& git rev-parse "$($env:RELEASE_TAG)^{commit}").Trim()
+          if ($LASTEXITCODE -ne 0 -or $tagRevision -cne $env:SOURCE_REVISION) { throw 'Tag no longer identifies the built commit.' }
+          $json = & gh api --paginate --slurp "repos/$env:GITHUB_REPOSITORY/releases?per_page=100"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot check existing releases; no release will be created.' }
+          $pages = ($json -join "`n") | ConvertFrom-Json
+          $matches = @($pages | ForEach-Object { $_ } | Where-Object { $_.tag_name -ceq $env:RELEASE_TAG })
+          if ($matches.Count) { throw 'Release already exists. Inspect it; this job never overwrites releases or assets.' }
+      - name: Download and validate only this run candidate
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $artifact = Join-Path $env:RUNNER_TEMP 'release-candidate'
+          $output = Join-Path $env:RUNNER_TEMP 'release-assets'
+          & gh run download $env:GITHUB_RUN_ID --repo $env:GITHUB_REPOSITORY --name $env:CANDIDATE_ARTIFACT --dir $artifact
+          if ($LASTEXITCODE -ne 0) { throw 'Candidate download failed.' }
+          ./scripts/prepare-github-release.ps1 -Tag $env:RELEASE_TAG -SourceRevision $env:SOURCE_REVISION -RepositorySlug $env:GITHUB_REPOSITORY -ArtifactDirectory $artifact -OutputDirectory $output
+      - name: Create a draft with verified assets for manual publication
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $output = Join-Path $env:RUNNER_TEMP 'release-assets'
+          $metadata = Get-Content -Raw -LiteralPath (Join-Path $output 'release-manifest.json') | ConvertFrom-Json
+          $arguments = @('release','create',$env:RELEASE_TAG,'--repo',$env:GITHUB_REPOSITORY,'--draft','--verify-tag','--title',"$($metadata.module) $($metadata.version)",'--notes-file',(Join-Path $output 'release-notes.md'))
+          if ($metadata.version.Contains('-')) { $arguments += '--prerelease' }
+          $arguments += @((Join-Path $output $metadata.archive.path),(Join-Path $output 'release-manifest.json'),(Join-Path $output 'SHA256SUMS'))
+          & gh @arguments
+          if ($LASTEXITCODE -ne 0) { throw 'Draft creation/upload failed. Inspect any partial draft before retrying; no automatic overwrite is permitted.' }

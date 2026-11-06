@@ -78,6 +78,16 @@ Windows не предоставляет атомарную замену неск
 артефакты, не создавая тег, GitHub Release или item Steam.
 [Изменения](../../CHANGELOG.md) · [Заметки 1.0.0](../releases/1.0.0.md).
 
+После push тега `v<Version>` и успешного завершения всех проверок кандидата
+CI создаёт draft в [GitHub Releases](https://github.com/prisioner/rutony-credits/releases)
+с ZIP, `release-manifest.json` и `SHA256SUMS`. `Version` должна точно
+совпадать с `Version` из `Directory.Build.props`; неверный тег отклоняется.
+Владелец проверяет draft и публикует его вручную кнопкой **Publish**.
+
+Существующий release для тега не перезаписывается. После частичного сбоя
+перед повторным запуском проверьте состояние на GitHub; при необходимости
+удалите вручную только оставшийся draft.
+
 Из чистого Git checkout после commit выполните:
 
 ```powershell
